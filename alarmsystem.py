@@ -24,77 +24,97 @@ high_temp_alarm=-5
 
 alarm_set=bool(0)
 active_file=" "
-file_to_send=active_file
+
 
 #Email account credientials
 smtpUser = 'someone@windowslive.com'
 smtpPass = 'password'
 
 #Where to sent mails
-toAdd1 = 'someoneelse@hotmail.com'
-toAdd2 = 'someoneelse@email.com'
-fromAdd = smtpUser
+recipients = ['someone1@hotmail.com', 'someone2@email.com']
 
 def init():
 	create_file()
 	
 def send_email_with_recorded_temperatures():
-	subject = "records"
-	msg = MIMEMultipart()
-	msg['From'] = smtpUser
-	msg['To'] = toAdd1
-	msg['Subject'] = subject
+    subject = "records"
+    msg = MIMEMultipart()
+    msg['From'] = "Alarm System"
+    msg['To'] = ", ".join(recipients)
+    msg['Subject'] = subject
 
-	body = 'Hi there, sending this email from Python!'
-	msg.attach(MIMEText(body,'plain'))
-	
-	filename=active_file
-	attachment  =open(filename,'rb')
-	print (smtpUser)
-	print (toAdd1)
-	print (active_file)
-	print ("mail with attach sent")
-	part = MIMEBase('application','octet-stream')
-	part.set_payload((attachment).read())
-	encoders.encode_base64(part)
-	part.add_header('Content-Disposition',"attachment; filename= "+filename)
+    body = 'Hi there, sending this email from Python!'
+    msg.attach(MIMEText(body, 'plain'))
 
-	msg.attach(part)
-	text = msg.as_string()
-	server = smtplib.SMTP('smtp.outlook.com',587)
-	server.starttls()
-	server.login(smtpUser,smtpPass)
+    previous_day = datetime.datetime.now() - datetime.timedelta(1)
+    previous_day_filename = previous_day.strftime("%d%m%Y") + ".txt"
+    previous_day_file_if_exist = os.path.isfile(previous_day_filename)
+    if previous_day_file_if_exist:
+        print(previous_day_filename)
+        attachment = open(previous_day_filename, 'rb')
+        print(smtpUser)
+        print(recipients)
+        print(active_file)
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(attachment.read())
+        encoders.encode_base64(part)
 
+        part.add_header('Content-Disposition', "attachment; filename= " + previous_day_filename)
 
-	server.sendmail(smtpUser,toAdd1,text)
-	server.sendmail(smtpUser,toAdd2,text)
-	server.quit()
+        msg.attach(part)
+        text = msg.as_string()
+
+        connection_problem = bool(0)
+        while (not connection_problem):
+            try:
+                server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+                server.ehlo()
+                server.login(smtpUser, smtpPass)
+
+                server.sendmail(smtpUser, recipients, text)
+                server.quit()
+                connection_problem = bool(1)
+                print("mail with attach sent")
+            except:
+                connection_problem = bool(0)
+                print("wrong")
+                time.sleep(20)
+    else:
+        print("something wrong")
 
 def alarm_activated():
 	temp=read_temp()
-	sendEmailAlarm(temp)
+	send_Email_Alarm(temp)
 
 
-def sendEmailAlarm(param):
+def send_Email_Alarm(param):
 	global alarm_set
+	msg = MIMEMultipart()
+	msg['From'] = "Alarm System"
+	msg['To'] = ", ".join(recipients)
+	msg['Subject'] = "Alarm Activated"
+	temper = 20.05
+	body = "the temperature is: " + str(param)
+	msg.attach(MIMEText(body, 'plain'))
+	text = msg.as_string()
+	connection_problem = bool(0)
+	while (not connection_problem):
+		try:
+			server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+			server.ehlo()
+			server.login(smtpUser, smtpPass)
+
+			server.sendmail(smtpUser, recipients, text)
+			server.quit()
+			connection_problem = bool(1)
+			print("mail alarm activation send")
+		except:
+			connection_problem = bool(0)
+			print("wrong")
+			time.sleep(20)
 	alarm_set=bool(0)
-	subject = 'Alarm'
-	header = 'To: ' + toAdd + '\n' + 'From: ' + '\n\n' + 'Subject: ' + subject
-	string_value='Temperature: ' +str(param)
-	body= string_value
+	print ('Alarm activated sended email')
 
-	print 'Alarm activated sended email'
-
-	s = smtplib.SMTP('smtp.outlook.com',587)
-
-	s.ehlo()
-	s.starttls()
-	s.ehlo()
-
-	s.login(smtpUser, smtpPass)
-	s.sendmail(fromAdd, toAdd1, header + '\n' + body)
-        s.sendmail(fromAdd, toAdd2, header + '\n' + body) 
-	s.quit()
 
 def read_temp_raw():
     f = open(device_file, 'r')
@@ -114,13 +134,16 @@ def read_temp():
         return temp_c
 
 def create_file():
-	filename=datetime.datetime.now().strftime("%d%m%Y")+".txt"
-	global active_file
-	global file_to_send
-	file_to_send=active_file
-	active_file=filename
-	file = open(filename,"w")
-	file.close()
+    filename = datetime.datetime.now().strftime("%d%m%Y") + ".txt"
+    my_file = os.path.isfile(filename)
+    global active_file
+    if (not my_file):
+        print("exist")
+        active_file = filename
+        file = open(filename, "w")
+        file.close()
+    else:
+        active_file = filename
 
 def record_temperature():
 	timestamp_of_record=datetime.datetime.now().strftime("%H:%M:%S")
@@ -147,17 +170,17 @@ try:
         while True:
 		schedule.run_pending()
 		temperature = read_temp()
-                print temperature
+                print (temperature)
                	if (temperature>high_temp_alarm or temperature<low_temp_alarm):
 			if (alarm_set==bool(0)):
 				alarm_set=bool(1)
 				t=threading.Timer(300,alarm_activated)
 				t.start()
-				print "alarm activated"
+				print ("alarm activated")
 		elif (alarm_set==bool(1)):
 			alarm_set=bool(0)
 			t.cancel()
-			print "alarm canceled"
+			print ("alarm canceled")
                 time.sleep(1)
 
 except KeyboardInterrupt:
